@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>Pentest Report</title>
+<style>
+body { font-family: system-ui, -apple-system, sans-serif; margin: 40px auto; max-width: 960px; padding: 0 20px; line-height: 1.6; color: #24292e; background: #fff; }
+.table-container { overflow-x: auto; margin: 20px 0; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; min-width: 500px; }
+th, td { border: 1px solid #e1e4e8; padding: 10px 12px; text-align: left; }
+th { background-color: #f6f8fa; font-weight: 600; }
+pre { background: #f6f8fa; padding: 16px; overflow-x: auto; border: 1px solid #e1e4e8; border-radius: 6px; }
+hr { margin: 40px 0; border: 0; border-top: 1px solid #e1e4e8; }
+.filter-bar { padding: 16px; background: #f6f8fa; border: 1px solid #e1e4e8; margin-bottom: 24px; border-radius: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+.filter-bar input, .filter-bar select { padding: 8px 12px; border: 1px solid #d1d5da; border-radius: 6px; font-size: 14px; flex: 1 1 200px; }
+.back-to-top { display: inline-block; margin-top: 16px; font-size: 13px; color: #0366d6; text-decoration: none; }
+.back-to-top:hover { text-decoration: underline; }
+.alert-warning { background: #fffbdd; border: 1px solid #d9d0a5; color: #735c0f; padding: 12px 16px; border-radius: 6px; margin-bottom: 24px; }
+@media (max-width: 600px) {
+  body { margin: 16px auto; padding: 0 12px; }
+  .filter-bar { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#finding-results">Skip to findings</a>
+<div id="top"></div>
+<div class="filter-bar">
+  <input type="text" id="searchTitle" aria-label="Search findings by title" placeholder="Search by title...">
+  <select id="filterSeverity" aria-label="Filter findings by severity">
+    <option value="All">All Severities</option>
+    <option value="Critical">Critical</option>
+    <option value="High">High</option>
+    <option value="Medium">Medium</option>
+    <option value="Low">Low</option>
+    <option value="Info">Info</option>
+  </select>
+</div>
+<script>
+document.getElementById('searchTitle').addEventListener('input', filterFindings);
+document.getElementById('filterSeverity').addEventListener('change', filterFindings);
+function filterFindings() {
+  const search = document.getElementById('searchTitle').value.toLowerCase();
+  const sev = document.getElementById('filterSeverity').value;
+  document.querySelectorAll('.finding-block').forEach(el => {
+    const titleMatch = el.getAttribute('data-title').includes(search);
+    const sevMatch = sev === 'All' || el.getAttribute('data-severity') === sev;
+    el.style.display = (titleMatch && sevMatch) ? 'block' : 'none';
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const picker = document.getElementById('report-theme');
+    const key = 'repx.report.theme';
+    function apply(value) {
+        if (value === 'light' || value === 'dark') {
+            document.documentElement.setAttribute('data-report-theme', value);
+        } else {
+            document.documentElement.removeAttribute('data-report-theme');
+        }
+    }
+    let preference = 'system';
+    try {
+        const saved = localStorage.getItem(key);
+        if (saved === 'light' || saved === 'dark') preference = saved;
+    } catch (_) { /* Some browsers restrict storage for local files. */ }
+    picker.value = preference;
+    apply(preference);
+    picker.disabled = false;
+    picker.addEventListener('change', () => {
+        apply(picker.value);
+        try {
+            if (picker.value === 'system') localStorage.removeItem(key);
+            else localStorage.setItem(key, picker.value);
+        } catch (_) { /* The selection still applies for this open report. */ }
+    });
+});
+</script>
+<style id="repx-report-ui-style">
+* { box-sizing: border-box; }
+body {
+    width: min(calc(100% - 2rem), 56rem);
+    max-width: none;
+    margin: clamp(1rem, 4vw, 2.5rem) auto;
+    color: #1f2937;
+    overflow-wrap: anywhere;
+}
+h1, h2, h3 { line-height: 1.25; }
+table { display: block; max-width: 100%; overflow-x: auto; }
+.filter-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(10rem, 14rem) auto;
+    align-items: end;
+    gap: 1rem;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid #aeb8c6;
+    border-radius: .5rem;
+    background: #f6f8fb;
+}
+.filter-field { display: grid; min-width: 0; gap: .35rem; }
+.filter-field label { font-weight: 600; }
+.filter-bar input, .filter-bar select, .filter-bar button {
+    min-height: 2.75rem;
+    padding: .55rem .75rem;
+    border: 1px solid #66758a;
+    border-radius: .375rem;
+    background: #fff;
+    color: #1f2937;
+    font: inherit;
+}
+.filter-bar button {
+    width: auto;
+    cursor: pointer;
+    border-color: #174a73;
+    background: #174a73;
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.filter-bar button:hover { background: #103653; }
+.filter-bar input:focus-visible, .filter-bar select:focus-visible,
+.filter-bar button:focus-visible, .skip-link:focus-visible,
+.reset-filters:focus-visible, #finding-results:focus-visible {
+    outline: 3px solid #005fcc;
+    outline-offset: 3px;
+}
+.skip-link {
+    position: absolute;
+    z-index: 1;
+    top: .5rem;
+    left: -10000px;
+    padding: .65rem .9rem;
+    border-radius: .375rem;
+    background: #fff;
+    color: #123b5d;
+}
+.skip-link:focus { left: .75rem; }
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+.report-ui-tools { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin: 0 0 1rem; }
+.reset-filters {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    padding: .55rem .75rem;
+    border: 1px solid #174a73;
+    border-radius: .375rem;
+    color: #174a73;
+    font-weight: 600;
+}
+.empty-report-state, .empty-filter-state, .filtered-overview-note { display: none; margin: 0; }
+.report-ui-tools p[role="status"] { flex: 1; }
+body:not(:has(>.finding-block)) .empty-report-state { display: block; }
+body:has(>.finding-block):not(:has(>.finding-block:not([style*="display: none"]))) .empty-filter-state { display: block; }
+body:has(>.finding-block[style*="display: none"]) .filtered-overview-note { display: block; }
+body:has(>.finding-block[style*="display: none"]) h2#finding-results + ul { display: none; }
+.finding-block { scroll-margin-block: 1rem; }
+html { background: #f1f4f7; }
+body {
+    padding: clamp(1rem, 4vw, 2.5rem);
+    border: 1px solid #d8e0e8;
+    border-radius: .75rem;
+    font-size: 16px;
+    line-height: 1.65;
+}
+body > h1 { font-size: clamp(1.7rem, 4vw, 2.25rem); letter-spacing: -.035em; }
+body > h2 { margin-top: 2rem; font-size: 1.25rem; }
+body > h3 { font-size: 1rem; }
+.table-container table { display: table; min-width: 0; width: 100%; }
+.table-container th, .table-container td { padding: .65rem clamp(.3rem, 1.5vw, 1rem); }
+body > .table-container th, body > .table-container td { text-align: center; }
+a { color: #155786; text-underline-offset: .2em; }
+a:focus-visible { outline: 3px solid #005fcc; outline-offset: 3px; }
+.finding-block {
+    padding: 1.75rem 0 1rem 1.25rem;
+    border-top: 1px solid #d8e0e8;
+    border-left: 4px solid #64748b;
+    margin-top: 2.5rem;
+}
+.finding-block[data-severity="Critical"] { border-left-color: #a31b35; }
+.finding-block[data-severity="High"] { border-left-color: #b44221; }
+.finding-block[data-severity="Medium"] { border-left-color: #947000; }
+.finding-block[data-severity="Low"] { border-left-color: #216180; }
+.finding-block > hr { display: none; }
+.finding-block h1 { margin: 0 0 1.25rem; font-size: 1.6rem; letter-spacing: -.025em; }
+.finding-block h2 { font-size: 1.05rem; margin: 1.75rem 0 .6rem; }
+.finding-block h3 { font-size: .9rem; color: #475569; }
+.finding-block p { margin: .65rem 0; }
+.finding-block pre { font: .85rem/1.6 Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.finding-footer { margin-top: 1.5rem; }
+@media print {
+    html { background: #fff; }
+    body { width: 100%; margin: 0; border: 0; padding: 0; }
+    .filter-bar, .report-ui-tools, .skip-link, .finding-footer { display: none; }
+    .finding-block { break-inside: avoid; }
+}
+@media (max-width: 640px) {
+    body { width: calc(100% - 2rem); }
+    .filter-bar { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+    .report-ui-tools { align-items: flex-start; flex-direction: column-reverse; }
+}
+@media (forced-colors: active) {
+    .filter-bar button { border: 1px solid ButtonText; }
+    :focus-visible { outline-color: Highlight; }
+}
+</style>
+<style id="repx-report-theme-style">
+:root {
+    color-scheme: light;
+    --page: #f1f4f7; --paper: #ffffff; --text: #1f2937;
+    --muted: #475569; --line: #c2ccd8; --panel: #f1f4f8;
+    --control: #ffffff; --control-line: #66758a; --link: #155786;
+    --focus: #005fcc; --warning: #fff6d6; --warning-text: #634b00;
+    --critical: #a31b35; --high: #b44221; --medium: #947000; --low: #216180;
+}
+:root[data-report-theme="dark"] {
+    color-scheme: dark;
+    --page: #111820; --paper: #19222d; --text: #e4ebf3;
+    --muted: #b4c1d1; --line: #526176; --panel: #222e3d;
+    --control: #14202d; --control-line: #8598ae; --link: #8ac6ff;
+    --focus: #9bd2ff; --warning: #392f17; --warning-text: #f5d88b;
+    --critical: #ff9daf; --high: #ffb18b; --medium: #f0d27c; --low: #8ac6ff;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-report-theme="light"]) {
+        color-scheme: dark;
+        --page: #111820; --paper: #19222d; --text: #e4ebf3;
+        --muted: #b4c1d1; --line: #526176; --panel: #222e3d;
+        --control: #14202d; --control-line: #8598ae; --link: #8ac6ff;
+        --focus: #9bd2ff; --warning: #392f17; --warning-text: #f5d88b;
+        --critical: #ff9daf; --high: #ffb18b; --medium: #f0d27c; --low: #8ac6ff;
+    }
+}
+html { background: var(--page); }
+body { color: var(--text); background: var(--paper); border-color: var(--line); }
+a, .reset-filters, .back-to-top { color: var(--link); }
+.reset-filters { border-color: var(--link); }
+.filter-bar, th, pre { background: var(--panel); border-color: var(--line); }
+th, td, .finding-block { border-color: var(--line); }
+.filter-bar input, .filter-bar select, .theme-picker select {
+    background: var(--control); color: var(--text); border: 1px solid var(--control-line);
+}
+input::placeholder { color: var(--muted); opacity: 1; }
+.finding-block h3 { color: var(--muted); }
+.finding-block[data-severity="Critical"] { border-left-color: var(--critical); }
+.finding-block[data-severity="High"] { border-left-color: var(--high); }
+.finding-block[data-severity="Medium"] { border-left-color: var(--medium); }
+.finding-block[data-severity="Low"] { border-left-color: var(--low); }
+.alert-warning { color: var(--warning-text); background: var(--warning); border-color: var(--control-line); }
+.skip-link { color: var(--link); background: var(--paper); }
+.report-ui-tools { flex-wrap: wrap; }
+.theme-picker { display: flex; align-items: center; gap: .6rem; }
+.theme-picker select { min-height: 2.75rem; padding: .5rem .6rem; border-radius: .375rem; font: inherit; }
+:focus-visible { outline: 3px solid var(--focus) !important; outline-offset: 3px; }
+@media print {
+    :root { color-scheme: light !important; }
+    html, body, .finding-block { color: #111 !important; background: #fff !important; }
+    a, .finding-block h3 { color: #111 !important; }
+    th, pre { color: #111 !important; background: #f2f2f2 !important; }
+    th, td, pre, .finding-block { border-color: #777 !important; }
+    .finding-block { display: block !important; }
+    #finding-results + ul { display: block !important; }
+    .alert-warning { color: #111 !important; background: #fff !important; }
+}
+</style>
+<label class="sr-only" for="searchTitle">Search findings</label>
+<label class="sr-only" for="filterSeverity">Filter by severity</label>
+<div class="report-ui-tools">
+    <a class="reset-filters" href="report.html">Reset filters</a>
+    <div class="theme-picker"><label for="report-theme">Theme</label>
+        <select id="report-theme" disabled>
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+        </select>
+    </div>
+    <p class="empty-report-state" role="status" aria-live="polite">No findings are included in this report.</p>
+    <p class="empty-filter-state" role="status" aria-live="polite">No findings match your filters.</p>
+    <p class="filtered-overview-note" role="status" aria-live="polite">Reset filters to show the findings overview again.</p>
+</div>
+<h1>Pentest Report Summary</h1>
+<h2>Executive Summary</h2>
+<p>Total Findings: 2</p>
+<h3>Risk Matrix</h3>
+<p>Counts cover the full report, including findings hidden by the filters.</p>
+<div class="table-container"><table>
+<thead>
+<tr>
+<th>Critical</th>
+<th>High</th>
+<th>Medium</th>
+<th>Low</th>
+<th>Info</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="finding-results" tabindex="-1">Findings Overview</h2>
+<ul>
+<li>
+<p>[Info] <a href="#open-port-443-tcp-https" rel="noopener noreferrer">Open Port: 443/tcp (https)</a> (Source: nmap)</p>
+</li>
+<li>
+<p>[Low] <a href="#demo-missing-security-header" rel="noopener noreferrer">Demo missing security header</a> (Source: nuclei)</p>
+</li>
+</ul>
+<h2>Affected Hosts</h2>
+<ul>
+<li>192.0.2.10</li>
+</ul>
+<div id="open-port-443-tcp-https" class="finding-block" data-severity="Info" data-title="open port: 443/tcp (https)"><hr>
+<h1>Open Port: 443/tcp (https)</h1>
+<p><strong>Severity</strong>: Info</p>
+<p><strong>CVSS score</strong>: Not provided</p>
+<p><strong>Source</strong>: nmap</p>
+<h2>Description</h2>
+<p>An open tcp port was discovered on port 443 running https.</p>
+<h2>Hosts</h2>
+<ul>
+<li>192.0.2.10 (demo.example)</li>
+</ul>
+<h2>Evidence</h2>
+<h3>port-scan</h3>
+<pre><code>Port: 443/tcp
+State: open
+Service: https
+Script http-title: Synthetic demo page
+</code></pre>
+<div class="finding-footer"><a href="#top" class="back-to-top">Back to top</a></div>
+</div>
+<div id="demo-missing-security-header" class="finding-block" data-severity="Low" data-title="demo missing security header"><hr>
+<h1>Demo missing security header</h1>
+<p><strong>Severity</strong>: Low</p>
+<p><strong>CVSS score</strong>: 0.0</p>
+<p><strong>Source</strong>: nuclei</p>
+<h2>Description</h2>
+<p>Synthetic example, not an observed vulnerability.</p>
+<h2>Remediation</h2>
+<p>Review the response headers.</p>
+<h2>Hosts</h2>
+<ul>
+<li>192.0.2.10 (https://demo.example)</li>
+</ul>
+<h2>Evidence</h2>
+<h3>match</h3>
+<pre><code>Matched at: https://demo.example/
+</code></pre>
+<div class="finding-footer"><a href="#top" class="back-to-top">Back to top</a></div>
+</div>
+
+</body>
+</html>
+
